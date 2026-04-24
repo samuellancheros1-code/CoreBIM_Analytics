@@ -1,0 +1,6 @@
+{
+  "name": "CoreBIM Analytics",
+  "description": "Dashboard para la estimación ágil (5D) y simulación probabilística (4D) de proyectos de infraestructura utilizando IFC y análisis PERT, contemplando escenarios de estrés macroeconómico.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
