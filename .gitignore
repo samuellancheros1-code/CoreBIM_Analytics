@@ -7,9 +7,5 @@ coverage/
 .env*
 !.env.example
 
-# Scripts de administración local (no son parte del proyecto)
-create_n8n_apikey.cjs
-query_n8n_db.cjs
-read_user.cjs
-reset_n8n_password.cjs
+# Archivos sensibles generados localmente
 n8n_apikey.txt
