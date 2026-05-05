@@ -1,6 +1,7 @@
 /**
- * ifcParser.ts - Motor de análisis IFC v4
+ * ifcParser.ts - Motor de análisis IFC v4 (IFC 4.3 completo)
  * ──────────────────────────────────────────────────────────────────────────────
+ * Extrae: materiales, cantidades (QTO), PropertySets (Pset_*) y datos de tipo.
  * Ejecuta web-ifc en un Web Worker (Blob URL) para no bloquear el hilo
  * principal. web-ifc se carga via importScripts() desde /public local.
  */
@@ -26,11 +27,47 @@ export interface MaterialQuantity {
   estimatedFromGeometry: boolean;
 }
 
+// ─── Nuevas interfaces IFC 4.3 ────────────────────────────────────────────────
+
+export interface IFCPropertyValue {
+  name: string;
+  value: string | number | boolean | null;
+  unit?: string;
+}
+
+export interface IFCPropertySetData {
+  psetName: string;       // e.g. "Pset_WallCommon", "Qto_WallBaseQuantities"
+  psetType: 'Pset' | 'Qto' | 'TypePset';
+  properties: IFCPropertyValue[];
+}
+
+export interface IFCElementData {
+  expressId: number;
+  globalId: string;
+  ifcTypeName: string;    // e.g. "IFCWALL"
+  elementLabel: string;   // IFC type human label e.g. "Muro"
+  name: string;
+  description: string;
+  objectType: string;
+  tag: string;
+  materialName: string;
+  propertySets: IFCPropertySetData[];
+  quantities: {
+    volume: number;
+    area: number;
+    length: number;
+    weight: number;
+    count: number;
+  };
+}
+
 export interface ParsedIFCData {
   projectName: string;
   projectDescription: string;
   location: ProjectLocation;
   materialQuantities: MaterialQuantity[];
+  elements: IFCElementData[];
+  availablePsets: string[];
   rawElementCount: number;
   parsingWarnings: string[];
   quantitySource: 'IfcElementQuantity' | 'Estimated' | 'Mixed';
@@ -199,6 +236,133 @@ function buildQuantityIndex(api, IFC, modelID) {
   return index;
 }
 
+// ─── buildPropertyIndex: lee todos IfcPropertySet e IfcElementQuantity por elemento ───
+function buildPropertyIndex(api, IFC, modelID) {
+  var index = new Map();
+  try {
+    var relIds = api.GetLineIDsWithType(modelID, IFC.IFCRELDEFINESBYPROPERTIES);
+    for (var i = 0; i < relIds.size(); i++) {
+      try {
+        var rel = api.GetLine(modelID, relIds.get(i), true);
+        if (!rel || !rel.RelatedObjects || !rel.RelatingPropertyDefinition) continue;
+        var pd = api.GetLine(modelID, rel.RelatingPropertyDefinition.value, true);
+        if (!pd) continue;
+        var psetData = null;
+        if (pd.type === IFC.IFCPROPERTYSET) {
+          var psetName = (pd.Name && pd.Name.value) || 'Pset_Sin_Nombre';
+          var props = [];
+          if (pd.HasProperties) {
+            var hasProps = Array.isArray(pd.HasProperties) ? pd.HasProperties : [pd.HasProperties];
+            for (var j = 0; j < hasProps.length; j++) {
+              try {
+                var prop = api.GetLine(modelID, hasProps[j].value, true);
+                if (!prop) continue;
+                var propName = (prop.Name && prop.Name.value) || '';
+                var propValue = null;
+                if (prop.type === IFC.IFCPROPERTYSINGLEVALUE && prop.NominalValue != null) {
+                  propValue = prop.NominalValue.value;
+                } else if (prop.type === IFC.IFCPROPERTYENUMERATEDVALUE && prop.EnumerationValues) {
+                  var evals = Array.isArray(prop.EnumerationValues) ? prop.EnumerationValues : [prop.EnumerationValues];
+                  propValue = evals.map(function(v) { return v && v.value; }).filter(Boolean).join(', ');
+                } else if (prop.type === IFC.IFCPROPERTYLISTVALUE && prop.ListValues) {
+                  var lvals = Array.isArray(prop.ListValues) ? prop.ListValues : [prop.ListValues];
+                  propValue = lvals.map(function(v) { return v && v.value; }).filter(Boolean).join(', ');
+                } else if (prop.type === IFC.IFCPROPERTYBOUNDEDVALUE) {
+                  var lo = prop.LowerBoundValue && prop.LowerBoundValue.value;
+                  var hi = prop.UpperBoundValue && prop.UpperBoundValue.value;
+                  propValue = (lo != null && hi != null) ? (lo + ' - ' + hi) : (lo != null ? lo : hi);
+                }
+                if (propName) props.push({ name: propName, value: propValue });
+              } catch(e2) {}
+            }
+          }
+          psetData = { psetName: psetName, psetType: 'Pset', properties: props };
+        } else if (pd.type === IFC.IFCELEMENTQUANTITY) {
+          var qtoName = (pd.Name && pd.Name.value) || 'Qto_Sin_Nombre';
+          var qprops = [];
+          if (pd.Quantities) {
+            var qs = Array.isArray(pd.Quantities) ? pd.Quantities : [pd.Quantities];
+            for (var k = 0; k < qs.length; k++) {
+              try {
+                var q = api.GetLine(modelID, qs[k].value, true);
+                if (!q) continue;
+                var qName = (q.Name && q.Name.value) || '';
+                var qValue = null; var qUnit = '';
+                if (q.type === IFC.IFCQUANTITYVOLUME && q.VolumeValue) { qValue = Math.abs(q.VolumeValue.value || 0); qUnit = 'm³'; }
+                else if (q.type === IFC.IFCQUANTITYAREA && q.AreaValue) { qValue = Math.abs(q.AreaValue.value || 0); qUnit = 'm²'; }
+                else if (q.type === IFC.IFCQUANTITYLENGTH && q.LengthValue) { qValue = Math.abs(q.LengthValue.value || 0); qUnit = 'm'; }
+                else if (q.type === IFC.IFCQUANTITYWEIGHT && q.WeightValue) { qValue = Math.abs(q.WeightValue.value || 0); qUnit = 'kg'; }
+                else if (q.type === IFC.IFCQUANTITYCOUNT && q.CountValue) { qValue = q.CountValue.value; qUnit = 'un'; }
+                else if (q.type === IFC.IFCQUANTITYTIME && q.TimeValue) { qValue = q.TimeValue.value; qUnit = 'h'; }
+                if (qName) qprops.push({ name: qName, value: qValue, unit: qUnit });
+              } catch(e3) {}
+            }
+          }
+          psetData = { psetName: qtoName, psetType: 'Qto', properties: qprops };
+        }
+        if (psetData) {
+          var related = Array.isArray(rel.RelatedObjects) ? rel.RelatedObjects : [rel.RelatedObjects];
+          for (var r = 0; r < related.length; r++) {
+            if (!related[r] || related[r].value == null) continue;
+            if (!index.has(related[r].value)) index.set(related[r].value, []);
+            index.get(related[r].value).push(psetData);
+          }
+        }
+      } catch(e) {}
+    }
+  } catch(e) {}
+  return index;
+}
+
+// ─── buildTypePropertyIndex: propiedades heredadas del IfcTypeObject ───
+function buildTypePropertyIndex(api, IFC, modelID) {
+  var index = new Map();
+  try {
+    var relIds = api.GetLineIDsWithType(modelID, IFC.IFCRELDEFINESBYTYPE);
+    for (var i = 0; i < relIds.size(); i++) {
+      try {
+        var rel = api.GetLine(modelID, relIds.get(i), true);
+        if (!rel || !rel.RelatedObjects || !rel.RelatingType) continue;
+        var typeObj = api.GetLine(modelID, rel.RelatingType.value, true);
+        if (!typeObj || !typeObj.HasPropertySets) continue;
+        var typePsetsRefs = Array.isArray(typeObj.HasPropertySets) ? typeObj.HasPropertySets : [typeObj.HasPropertySets];
+        var psetDataList = [];
+        for (var p = 0; p < typePsetsRefs.length; p++) {
+          try {
+            var pd = api.GetLine(modelID, typePsetsRefs[p].value, true);
+            if (!pd || !pd.HasProperties) continue;
+            var psetName = ((pd.Name && pd.Name.value) || 'TypePset') + ' (Tipo)';
+            var props = [];
+            var hasProps = Array.isArray(pd.HasProperties) ? pd.HasProperties : [pd.HasProperties];
+            for (var j = 0; j < hasProps.length; j++) {
+              try {
+                var prop = api.GetLine(modelID, hasProps[j].value, true);
+                if (!prop) continue;
+                var propName = (prop.Name && prop.Name.value) || '';
+                var propValue = null;
+                if (prop.type === IFC.IFCPROPERTYSINGLEVALUE && prop.NominalValue != null) {
+                  propValue = prop.NominalValue.value;
+                }
+                if (propName) props.push({ name: propName, value: propValue });
+              } catch(e2) {}
+            }
+            if (props.length > 0) psetDataList.push({ psetName: psetName, psetType: 'TypePset', properties: props });
+          } catch(e) {}
+        }
+        if (psetDataList.length > 0) {
+          var related = Array.isArray(rel.RelatedObjects) ? rel.RelatedObjects : [rel.RelatedObjects];
+          for (var r = 0; r < related.length; r++) {
+            if (!related[r] || related[r].value == null) continue;
+            if (!index.has(related[r].value)) index.set(related[r].value, []);
+            for (var d = 0; d < psetDataList.length; d++) index.get(related[r].value).push(psetDataList[d]);
+          }
+        }
+      } catch(e) {}
+    }
+  } catch(e) {}
+  return index;
+}
+
 async function runParse(buffer, wasmBaseUrl) {
   const warnings = [];
   const report = function(step, pct) { self.postMessage({ type: 'progress', step: step, pct: pct }); };
@@ -284,15 +448,21 @@ async function runParse(buffer, wasmBaseUrl) {
     }
   } catch(e) { warnings.push('Error al leer IfcSite: ' + String(e)); }
 
-  report('Indexando materiales...', 40);
+  report('Indexando materiales...', 38);
   const materialIndex = buildMaterialIndex(api, IFC, modelID);
 
-  report('Indexando cantidades (IfcElementQuantity)...', 50);
+  report('Indexando cantidades (IfcElementQuantity)...', 44);
   const quantityIndex = buildQuantityIndex(api, IFC, modelID);
   const hasQSets = quantityIndex.size > 0;
   if (!hasQSets) {
     warnings.push('El modelo no contiene IfcElementQuantity. Las cantidades se estimarán.');
   }
+
+  report('Indexando PropertySets (Pset_*)...', 50);
+  const propertyIndex = buildPropertyIndex(api, IFC, modelID);
+
+  report('Indexando propiedades de tipo (IfcTypeObject)...', 56);
+  const typePropertyIndex = buildTypePropertyIndex(api, IFC, modelID);
 
   const ELEMENT_TYPES_CONFIG = [
     { type: IFC.IFCWALL, label: 'Muro' },
@@ -314,12 +484,14 @@ async function runParse(buffer, wasmBaseUrl) {
   ];
 
   const matMap = new Map();
+  const elements = [];
+  const psetNamesSet = new Set();
   let rawElementCount = 0;
   const totalTypes = ELEMENT_TYPES_CONFIG.length;
 
   for (let tIndex = 0; tIndex < totalTypes; tIndex++) {
     const typeConf = ELEMENT_TYPES_CONFIG[tIndex];
-    report('Analizando: ' + typeConf.label + '...', 55 + Math.floor((tIndex / totalTypes) * 35));
+    report('Analizando: ' + typeConf.label + '...', 60 + Math.floor((tIndex / totalTypes) * 32));
 
     let ids = null;
     try { ids = api.GetLineIDsWithType(modelID, typeConf.type); } catch(e) { continue; }
@@ -331,7 +503,7 @@ async function runParse(buffer, wasmBaseUrl) {
     for (let i = 0; i < count; i++) {
       const eid = ids.get(i);
       const matData = materialIndex.get(eid) || { name: 'Sin Material', thickness: 0 };
-      let vol = 0, area = 0, len = 0, estimated = false;
+      let vol = 0, area = 0, len = 0, wgt = 0, cnt = 0, estimated = false;
       const qData = quantityIndex.get(eid);
       if (qData) {
         vol = qData.vol; area = qData.area; len = qData.len;
@@ -339,6 +511,55 @@ async function runParse(buffer, wasmBaseUrl) {
         estimated = true;
         if (matData.thickness > 0) { area = 1; }
       }
+
+      // Propiedades del elemento
+      let elemGlobalId = '', elemName = '', elemDesc = '', elemObjType = '', elemTag = '';
+      try {
+        const line = api.GetLine(modelID, eid, true);
+        if (line) {
+          elemGlobalId = (line.GlobalId && line.GlobalId.value) || '';
+          elemName = (line.Name && line.Name.value) || '';
+          elemDesc = (line.Description && line.Description.value) || '';
+          elemObjType = (line.ObjectType && line.ObjectType.value) || '';
+          elemTag = (line.Tag && line.Tag.value) || '';
+        }
+      } catch(e) {}
+
+      // Recopilar PSets: del elemento + del tipo
+      const elemPsets = [];
+      const ownPsets = propertyIndex.get(eid) || [];
+      const typePsets = typePropertyIndex.get(eid) || [];
+      const allPsets = ownPsets.concat(typePsets);
+      for (let p = 0; p < allPsets.length; p++) {
+        elemPsets.push(allPsets[p]);
+        psetNamesSet.add(allPsets[p].psetName);
+        // Acumular cantidades desde QTO psets
+        if (allPsets[p].psetType === 'Qto') {
+          for (let pp = 0; pp < allPsets[p].properties.length; pp++) {
+            const pr = allPsets[p].properties[pp];
+            if (pr.unit === 'm³' && pr.value) vol = Math.max(vol, Math.abs(Number(pr.value)));
+            if (pr.unit === 'm²' && pr.value) area = Math.max(area, Math.abs(Number(pr.value)));
+            if (pr.unit === 'm' && pr.value) len = Math.max(len, Math.abs(Number(pr.value)));
+            if (pr.unit === 'kg' && pr.value) wgt += Math.abs(Number(pr.value));
+            if (pr.unit === 'un' && pr.value) cnt += Math.abs(Number(pr.value));
+          }
+        }
+      }
+
+      elements.push({
+        expressId: eid,
+        globalId: elemGlobalId,
+        ifcTypeName: String(typeConf.type),
+        elementLabel: typeConf.label,
+        name: elemName,
+        description: elemDesc,
+        objectType: elemObjType,
+        tag: elemTag,
+        materialName: matData.name,
+        propertySets: elemPsets,
+        quantities: { volume: vol, area: area, length: len, weight: wgt, count: cnt },
+      });
+
       const key = matData.name + '|||' + typeConf.label;
       if (matMap.has(key)) {
         const ex = matMap.get(key);
@@ -370,6 +591,10 @@ async function runParse(buffer, wasmBaseUrl) {
   });
   materialQuantities.sort(function(a, b) { return (b.volume || b.area) - (a.volume || a.area); });
 
+  const availablePsets = [];
+  psetNamesSet.forEach(function(n) { availablePsets.push(n); });
+  availablePsets.sort();
+
   report('¡Análisis completado!', 100);
   self.postMessage({
     type: 'result',
@@ -378,6 +603,8 @@ async function runParse(buffer, wasmBaseUrl) {
       projectDescription: projectDescription,
       location: location,
       materialQuantities: materialQuantities.filter(function(m) { return m.count > 0; }),
+      elements: elements,
+      availablePsets: availablePsets,
       rawElementCount: rawElementCount,
       parsingWarnings: warnings,
       quantitySource: hasQSets ? 'IfcElementQuantity' : 'Estimated',

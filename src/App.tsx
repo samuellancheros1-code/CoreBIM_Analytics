@@ -1,16 +1,19 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { buildPresupuesto, PresupuestoGeneral } from './lib/apuEngine';
-import { parseIFCFile, ParsedIFCData } from './lib/ifcParser';
+import { parseIFCFile, ParsedIFCData, IFCElementData } from './lib/ifcParser';
 import { exportToExcel } from './lib/excelExporter';
+import IFCViewer3D from './components/IFCViewer3D';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
 } from 'recharts';
 import {
-  AlertCircle, FileUp, TrendingUp, AlertTriangle, Box, DollarSign,
   MapPin, Download, FileSpreadsheet, Package, Layers, ChevronRight,
-  CheckCircle, Loader2, Info, BarChart2, ClipboardList,
+  CheckCircle, Loader2, Info, BarChart2, ClipboardList, Search, Table2, X, Cube,
+  Globe, Navigation, Camera, Locate, Edit3, Box, FileUp, AlertCircle, DollarSign, TrendingUp, AlertTriangle
 } from 'lucide-react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { motion, AnimatePresence } from 'motion/react';
 
 // ─── Utilidades ────────────────────────────────────────────────────────────────
@@ -30,7 +33,7 @@ const CHART_COLORS = [
 ];
 
 // ─── Tipos de Vista ────────────────────────────────────────────────────────────
-type View = 'upload' | 'dashboard' | 'budget' | 'apu' | 'map' | 'json';
+type View = 'upload' | 'dashboard' | 'budget' | 'apu' | 'map' | 'elements' | 'viewer3d' | 'json';
 
 // ─── Componente Principal ──────────────────────────────────────────────────────
 export default function App() {
@@ -43,6 +46,10 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [selectedApuIndex, setSelectedApuIndex] = useState(0);
+  const [selectedElement, setSelectedElement] = useState<IFCElementData | null>(null);
+  const [elemSearch, setElemSearch] = useState('');
+  const [rawFile, setRawFile] = useState<File | null>(null);
+  const [n8nAlertExpressId, setN8nAlertExpressId] = useState<number | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Manejador de Archivo IFC ──────────────────────────────────────────────
@@ -51,6 +58,7 @@ export default function App() {
       setParseError('El archivo debe tener extensión .ifc');
       return;
     }
+    setRawFile(file);
     setParseError(null);
     setIsLoading(true);
     setLoadingProgress(0);
@@ -67,6 +75,7 @@ export default function App() {
       setView('dashboard');
     } catch (err) {
       setParseError('Error al procesar el IFC: ' + String(err));
+      setRawFile(null);
     } finally {
       setIsLoading(false);
     }
@@ -143,23 +152,28 @@ export default function App() {
                 { id: 'dashboard', icon: BarChart2, label: 'Dashboard' },
                 { id: 'budget', icon: ClipboardList, label: 'Presupuesto' },
                 { id: 'apu', icon: Layers, label: 'APUs' },
+                { id: 'elements', icon: Table2, label: 'Elementos' },
+                { id: 'viewer3d', icon: Box, label: 'Visor 3D' },
                 { id: 'map', icon: MapPin, label: 'Ubicación' },
                 { id: 'json', icon: Package, label: 'Dataset' },
-              ] as { id: View; icon: React.ElementType; label: string }[]).map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setView(tab.id)}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap',
-                    view === tab.id
-                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  )}
-                >
-                  <tab.icon className="w-3.5 h-3.5" />
-                  {tab.label}
-                </button>
-              ))}
+              ] as { id: View; icon: React.ElementType; label: string }[]).map(tab => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setView(tab.id)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap',
+                      view === tab.id
+                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    )}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {tab.label}
+                  </button>
+                );
+              })}
               <button
                 onClick={handleExportExcel}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors ml-2"
@@ -257,13 +271,16 @@ export default function App() {
                   { icon: Layers, title: 'Motor APU Experto', desc: 'Desglose completo: Materiales, MO, Equipos y Transporte según estándar IFC' },
                   { icon: MapPin, title: 'Geolocalización IFC', desc: 'Extrae RefLatitude/RefLongitude del IfcSite para ubicar tu proyecto en el mapa' },
                   { icon: FileSpreadsheet, title: 'Excel Profesional', desc: 'Genera presupuesto multipestaña: portada, cantidades, partidas y APUs detallados' },
-                ].map(card => (
-                  <div key={card.title} className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                    <card.icon className="w-5 h-5 text-emerald-400 mb-2" />
-                    <h3 className="text-slate-200 font-medium text-sm mb-1">{card.title}</h3>
-                    <p className="text-slate-500 text-xs leading-relaxed">{card.desc}</p>
-                  </div>
-                ))}
+                ].map(card => {
+                  const Icon = card.icon;
+                  return (
+                    <div key={card.title} className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                      <Icon className="w-5 h-5 text-emerald-400 mb-2" />
+                      <h3 className="text-slate-200 font-medium text-sm mb-1">{card.title}</h3>
+                      <p className="text-slate-500 text-xs leading-relaxed">{card.desc}</p>
+                    </div>
+                  );
+                })}
               </div>
             </motion.div>
           )}
@@ -565,59 +582,307 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* ─── Vista: Elementos IFC ──────────────────────────────────────── */}
+          {view === 'elements' && parsedData && (
+            <motion.div key="elements" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-100">Elementos IFC</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {parsedData.elements.length} elementos · {parsedData.availablePsets.length} PropertySets encontrados
+                  </p>
+                </div>
+                <div className="relative w-full sm:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre, GlobalId, tipo..."
+                    value={elemSearch}
+                    onChange={e => { setElemSearch(e.target.value); setSelectedElement(null); }}
+                    className="w-full pl-8 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Tabla de elementos */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                  <div className="overflow-y-auto max-h-[60vh]">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-slate-800/90 backdrop-blur-sm">
+                        <tr>
+                          <th className="text-left text-xs text-slate-400 font-medium px-3 py-2.5">Tipo</th>
+                          <th className="text-left text-xs text-slate-400 font-medium px-3 py-2.5">Nombre</th>
+                          <th className="text-left text-xs text-slate-400 font-medium px-3 py-2.5">Material</th>
+                          <th className="text-right text-xs text-slate-400 font-medium px-3 py-2.5">PSets</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parsedData.elements
+                          .filter(el => {
+                            if (!elemSearch) return true;
+                            const q = elemSearch.toLowerCase();
+                            return (
+                              el.name.toLowerCase().includes(q) ||
+                              el.globalId.toLowerCase().includes(q) ||
+                              el.elementLabel.toLowerCase().includes(q) ||
+                              el.materialName.toLowerCase().includes(q) ||
+                              el.tag.toLowerCase().includes(q)
+                            );
+                          })
+                          .slice(0, 200)
+                          .map((el, i) => (
+                            <tr
+                              key={i}
+                              onClick={() => setSelectedElement(el)}
+                              className={cn(
+                                'border-b border-slate-800/50 cursor-pointer transition-colors',
+                                selectedElement?.expressId === el.expressId
+                                  ? 'bg-emerald-500/10 border-l-2 border-l-emerald-500'
+                                  : 'hover:bg-slate-800/40'
+                              )}
+                            >
+                              <td className="px-3 py-2">
+                                <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-mono">{el.elementLabel}</span>
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="text-slate-200 text-xs font-medium truncate max-w-[120px]">{el.name || '—'}</div>
+                                <div className="text-slate-500 text-[10px] font-mono truncate max-w-[120px]">{el.globalId}</div>
+                              </td>
+                              <td className="px-3 py-2 text-slate-400 text-xs truncate max-w-[100px]">{el.materialName}</td>
+                              <td className="px-3 py-2 text-right">
+                                <span className={cn(
+                                  'text-[10px] font-bold px-1.5 py-0.5 rounded',
+                                  el.propertySets.length > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-500'
+                                )}>{el.propertySets.length}</span>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Panel de propiedades */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                  {selectedElement ? (
+                    <>
+                      <div className="bg-slate-800/60 px-4 py-3 border-b border-slate-700 flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-emerald-400 text-xs font-mono mb-0.5">{selectedElement.elementLabel}</div>
+                          <div className="text-slate-100 font-semibold text-sm">{selectedElement.name || 'Sin nombre'}</div>
+                          <div className="text-slate-500 text-[10px] font-mono mt-0.5">{selectedElement.globalId}</div>
+                        </div>
+                        <button onClick={() => setSelectedElement(null)} className="text-slate-500 hover:text-slate-300 mt-0.5"><X className="w-4 h-4" /></button>
+                      </div>
+                      <div className="p-3 space-y-1 text-xs border-b border-slate-800">
+                        {[['Material', selectedElement.materialName], ['Tag', selectedElement.tag || '—'], ['ObjectType', selectedElement.objectType || '—'], ['Descripción', selectedElement.description || '—']].map(([k, v]) => (
+                          <div key={k} className="flex gap-2">
+                            <span className="text-slate-500 shrink-0 w-24">{k}</span>
+                            <span className="text-slate-300 truncate">{v}</span>
+                          </div>
+                        ))}
+                        <div className="flex gap-2">
+                          <span className="text-slate-500 shrink-0 w-24">Cantidades</span>
+                          <span className="text-slate-300">
+                            {[selectedElement.quantities.volume > 0 && `Vol: ${selectedElement.quantities.volume.toFixed(3)} m³`, selectedElement.quantities.area > 0 && `Área: ${selectedElement.quantities.area.toFixed(3)} m²`, selectedElement.quantities.length > 0 && `Long: ${selectedElement.quantities.length.toFixed(3)} m`].filter(Boolean).join(' · ') || '—'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="overflow-y-auto max-h-[42vh] p-3 space-y-3">
+                        {selectedElement.propertySets.length === 0 && (
+                          <p className="text-slate-500 text-xs text-center py-6">No se encontraron PropertySets para este elemento.</p>
+                        )}
+                        {selectedElement.propertySets.map((pset, pi) => (
+                          <div key={pi} className="bg-slate-800/50 rounded-lg overflow-hidden">
+                            <div className={cn('px-3 py-1.5 flex items-center gap-2', pset.psetType === 'Qto' ? 'bg-blue-500/10' : pset.psetType === 'TypePset' ? 'bg-purple-500/10' : 'bg-emerald-500/10')}>
+                              <span className={cn('text-[9px] font-bold uppercase px-1 py-0.5 rounded', pset.psetType === 'Qto' ? 'bg-blue-500/30 text-blue-300' : pset.psetType === 'TypePset' ? 'bg-purple-500/30 text-purple-300' : 'bg-emerald-500/30 text-emerald-300')}>{pset.psetType}</span>
+                              <span className="text-slate-200 text-xs font-medium">{pset.psetName}</span>
+                            </div>
+                            <div className="divide-y divide-slate-700/50">
+                              {pset.properties.map((prop, ppi) => (
+                                <div key={ppi} className="flex items-center gap-2 px-3 py-1.5">
+                                  <span className="text-slate-500 text-[10px] w-40 shrink-0 truncate">{prop.name}</span>
+                                  <span className="text-slate-200 text-[10px] font-mono truncate flex-1">{prop.value !== null && prop.value !== undefined ? String(prop.value) : <span className="text-slate-600">—</span>}</span>
+                                  {prop.unit && <span className="text-slate-600 text-[9px] shrink-0">{prop.unit}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center p-8">
+                      <Table2 className="w-10 h-10 text-slate-700 mb-3" />
+                      <p className="text-slate-500 text-sm">Selecciona un elemento para ver sus propiedades IFC 4.3</p>
+                      <p className="text-slate-600 text-xs mt-2">Pset_*, Qto_* y propiedades de tipo</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* PSets disponibles */}
+              {parsedData.availablePsets.length > 0 && (
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                  <h3 className="text-slate-300 text-sm font-semibold mb-3">PropertySets detectados en el modelo</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {parsedData.availablePsets.map(ps => (
+                      <span key={ps} className={cn(
+                        'text-[10px] px-2 py-1 rounded-full font-mono',
+                        ps.startsWith('Pset_') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        ps.includes('Qto') ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                        'bg-slate-700 text-slate-400'
+                      )}>{ps}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ─── Vista: Visor 3D IFC ───────────────────────────────────────── */}
+          {view === 'viewer3d' && parsedData && (
+            <motion.div key="viewer3d" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                    <Box className="w-5 h-5 text-emerald-400" />
+                    Visor 3D · {parsedData.projectName}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Geometría IFC renderizada en tiempo real · {parsedData.rawElementCount} elementos
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-slate-500 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
+                  <span className="text-emerald-400 font-semibold">Click</span> seleccionar &nbsp;·&nbsp;
+                  <span className="text-blue-400 font-semibold">Drag</span> orbitar &nbsp;·&nbsp;
+                  <span className="text-purple-400 font-semibold">Scroll</span> zoom
+                </div>
+              </div>
+              <div className="flex items-center justify-between bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm mb-4">
+                <div>
+                  <h3 className="text-emerald-400 font-bold flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5" />
+                    Simulación de Alerta N8N
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Visualiza cómo el visor 3D reacciona a una alerta de localización proveniente de Antigravity/N8N
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    // Buscar un elemento para resaltar (ej. el primer muro o cualquier elemento existente)
+                    const targetEl = parsedData.elements.find(e => e.elementLabel === 'IfcWall') || parsedData.elements[0];
+                    if (targetEl) {
+                      setN8nAlertExpressId(targetEl.expressId);
+                    }
+                  }}
+                  className="bg-red-600 hover:bg-red-500 text-white text-sm font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-red-900/20"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Recibir Alerta y Localizar
+                </button>
+              </div>
+              <div className="w-full rounded-2xl overflow-hidden border border-slate-800 shadow-2xl" style={{ height: '75vh' }}>
+                <IFCViewer3D file={rawFile} externalHighlightExpressId={n8nAlertExpressId} />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Elementos', value: String(parsedData.rawElementCount), color: 'text-emerald-400' },
+                  { label: 'Materiales', value: String(parsedData.materialQuantities.length), color: 'text-blue-400' },
+                  { label: 'PSets', value: String(parsedData.availablePsets.length), color: 'text-purple-400' },
+                  { label: 'Fuente QTO', value: parsedData.quantitySource === 'IfcElementQuantity' ? 'Nativo IFC' : 'Estimado', color: 'text-amber-400' },
+                ].map(item => (
+                  <div key={item.label} className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+                    <p className="text-slate-500 text-xs mb-1">{item.label}</p>
+                    <p className={`font-bold text-lg ${item.color}`}>{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
           {/* ─── Vista: Mapa de Ubicación ──────────────────────────────────── */}
           {view === 'map' && parsedData && (
             <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-              <h2 className="text-xl font-bold text-slate-100">Ubicación del Proyecto</h2>
+              <h2 className="text-xl font-bold text-slate-100">Localización Geoespacial</h2>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
                   <h3 className="font-semibold text-slate-200 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-emerald-400" /> Datos del IfcSite
+                    <MapPin className="w-4 h-4 text-emerald-400" /> Datos del Sitio
                   </h3>
                   {[
-                    { label: 'Nombre del Sitio', value: parsedData.location.name },
-                    { label: 'Descripción', value: parsedData.location.description || '—' },
-                    { label: 'Dirección', value: parsedData.location.address || 'No especificada en IFC' },
-                    { label: 'Latitud', value: parsedData.location.latitude !== null ? `${parsedData.location.latitude.toFixed(6)}°` : 'No especificada' },
-                    { label: 'Longitud', value: parsedData.location.longitude !== null ? `${parsedData.location.longitude.toFixed(6)}°` : 'No especificada' },
-                    { label: 'Elevación', value: parsedData.location.elevation !== null ? `${parsedData.location.elevation.toFixed(1)} msnm` : 'No especificada' },
+                    { label: 'Nombre del Proyecto', value: parsedData.projectName },
+                    { label: 'Sitio (IfcSite)', value: parsedData.location.name },
+                    { label: 'Dirección', value: parsedData.location.address || 'Pendiente de definir' },
+                    { label: 'Latitud', value: parsedData.location.latitude !== null ? `${parsedData.location.latitude.toFixed(6)}°` : '—' },
+                    { label: 'Longitud', value: parsedData.location.longitude !== null ? `${parsedData.location.longitude.toFixed(6)}°` : '—' },
+                    { label: 'Elevación', value: parsedData.location.elevation !== null ? `${parsedData.location.elevation.toFixed(1)} msnm` : '—' },
                   ].map(({ label, value }) => (
                     <div key={label} className="flex flex-col gap-0.5">
                       <span className="text-xs text-slate-500">{label}</span>
                       <span className="text-sm text-slate-200 font-medium">{value}</span>
                     </div>
                   ))}
+
                   {parsedData.location.latitude !== null && parsedData.location.longitude !== null && (
-                    <a
-                      href={`https://www.google.com/maps?q=${parsedData.location.latitude},${parsedData.location.longitude}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-3 py-2 rounded-lg transition-colors w-full justify-center mt-2"
-                    >
-                      <MapPin className="w-4 h-4" /> Abrir en Google Maps
-                    </a>
+                    <div className="grid grid-cols-1 gap-2 mt-4">
+                      <a
+                        href={`https://earth.google.com/web/@${parsedData.location.latitude},${parsedData.location.longitude},${parsedData.location.elevation || 0}a,1000d,35y,0h,0t,0r`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm px-3 py-2.5 rounded-lg transition-all w-full justify-center shadow-lg shadow-indigo-900/20"
+                      >
+                        <Globe className="w-4 h-4" /> Google Earth 3D
+                      </a>
+                      <a
+                        href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${parsedData.location.latitude},${parsedData.location.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm px-3 py-2.5 rounded-lg transition-all w-full justify-center border border-slate-700"
+                      >
+                        <Camera className="w-4 h-4" /> Street View
+                      </a>
+                    </div>
                   )}
+
+                  <div className="mt-6 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl">
+                    <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <Info className="w-3 h-3" /> Estado de Geolocalización
+                    </h4>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      {parsedData.location.latitude !== null 
+                        ? 'Coordenadas extraídas exitosamente del archivo IFC (IfcSite.RefLatitude/RefLongitude).' 
+                        : 'El modelo no contiene coordenadas. Utiliza Google Earth para obtener la ubicación exacta y actualizar el modelo en la fase de coordinación.'}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden min-h-[420px] flex items-center justify-center relative">
+                <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden min-h-[500px] relative">
                   {parsedData.location.latitude !== null && parsedData.location.longitude !== null ? (
-                    <iframe
-                      title="Mapa de ubicación del proyecto"
-                      className="w-full h-full min-h-[420px] border-0"
-                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${parsedData.location.longitude - 0.02},${parsedData.location.latitude - 0.02},${parsedData.location.longitude + 0.02},${parsedData.location.latitude + 0.02}&layer=mapnik&marker=${parsedData.location.latitude},${parsedData.location.longitude}`}
-                      loading="lazy"
-                    />
+                    <div className="w-full h-full">
+                      <LeafletMap 
+                        lat={parsedData.location.latitude} 
+                        lon={parsedData.location.longitude} 
+                        projectName={parsedData.projectName}
+                      />
+                    </div>
                   ) : (
-                    <div className="text-center p-8">
-                      <MapPin className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                      <p className="text-slate-400 font-medium mb-2">Coordenadas no disponibles</p>
-                      <p className="text-slate-500 text-sm max-w-sm">
-                        El archivo IFC no contiene coordenadas geográficas en el atributo <code className="bg-slate-800 px-1 rounded text-xs">IfcSite.RefLatitude/RefLongitude</code>.
-                        Esto es opcional en el estándar IFC 4.3.
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-12">
+                      <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
+                        <Locate className="w-8 h-8 text-slate-600" />
+                      </div>
+                      <h3 className="text-slate-300 font-bold text-lg mb-2">Localización Manual Requerida</h3>
+                      <p className="text-slate-500 text-sm max-w-sm mb-6">
+                        No se detectaron coordenadas en el archivo IFC. Es crucial para el BIM-Orchestrator asociar la ubicación real mediante Google Earth.
                       </p>
-                      <p className="text-slate-500 text-sm mt-3">
-                        Para habilitarlo, define estas propiedades en Revit/Archicad antes de exportar el IFC.
-                      </p>
+                      <button 
+                        onClick={() => window.open('https://earth.google.com/web/', '_blank')}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
+                      >
+                        <Globe className="w-4 h-4" /> Obtener en Google Earth
+                      </button>
                     </div>
                   )}
                 </div>
@@ -646,6 +911,45 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+// ─── Leaflet Map Component ───────────────────────────────────────────────────
+function LeafletMap({ lat, lon, projectName }: { lat: number; lon: number; projectName: string }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    // Create map
+    const map = L.map(mapRef.current).setView([lat, lon], 16);
+    leafletMapRef.current = map;
+
+    // Add Dark Mode tiles (Stadia Maps or CartoDB Dark Matter)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 20
+    }).addTo(map);
+
+    // Custom Marker
+    const icon = L.divIcon({
+      className: 'custom-div-icon',
+      html: `<div style="background-color: #10b981; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5);"></div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 24]
+    });
+
+    L.marker([lat, lon], { icon }).addTo(map)
+      .bindPopup(`<b style="color: #0f172a;">${projectName}</b><br/><span style="color: #475569; font-size: 11px;">Coordenadas: ${lat.toFixed(4)}, ${lon.toFixed(4)}</span>`)
+      .openPopup();
+
+    return () => {
+      map.remove();
+    };
+  }, [lat, lon, projectName]);
+
+  return <div ref={mapRef} className="w-full h-full" />;
 }
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
