@@ -1,0 +1,44 @@
+{
+  "name": "📍 Alerta de Obra y Localización",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alerta-obra",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-alerta",
+      "name": "Recepción Alerta N8N",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item;\nconst body = item.json.body || {};\n\n// Procesamiento de la localización y datos de la alerta\nreturn {\n  json: {\n    status: 'success',\n    mensaje: 'Alerta procesada exitosamente en BIM-Orchestrator',\n    data: {\n      proyecto: body.proyecto || 'Desconocido',\n      localizacion_coordenadas: body.localizacion || 'Sin coordenadas',\n      elemento_afectado: body.global_id || 'N/A',\n      costo_impacto: body.costo_propuesto || 0,\n      nivel_criticidad: body.criticidad || 'Media',\n      fecha_registro: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "id": "procesar-localizacion",
+      "name": "Procesar Localización",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    }
+  ],
+  "connections": {
+    "Recepción Alerta N8N": {
+      "main": [
+        [
+          {
+            "node": "Procesar Localización",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}

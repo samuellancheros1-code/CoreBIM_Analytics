@@ -1,0 +1,160 @@
+{
+  "name": "🏗️ BIM-Orchestrator | Demo Educativa (Sin Credenciales)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "🚀 Iniciar Simulación",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 240]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "project_name",
+              "value": "Edificio Residencial CoreBIM"
+            },
+            {
+              "name": "discipline",
+              "value": "Arquitectura"
+            },
+            {
+              "name": "phase",
+              "value": "Diseño"
+            },
+            {
+              "name": "ifc_file",
+              "value": "modelo_v1.ifc"
+            },
+            {
+              "name": "latitude",
+              "value": "4.6097"
+            },
+            {
+              "name": "longitude",
+              "value": "-74.0817"
+            }
+          ],
+          "number": [
+            {
+              "name": "element_count",
+              "value": 1250
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "mock-ifc-data",
+      "name": "📦 Datos de Entrada (MOCK)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [420, 240],
+      "notesInFlow": true,
+      "notes": "Simula la recepción de datos desde un archivo IFC subido."
+    },
+    {
+      "parameters": {
+        "jsCode": "// SIMULACIÓN DE ANÁLISIS DE INTELIGENCIA ARTIFICIAL\n// En un flujo real, aquí iría el nodo 'Google Gemini'\n\nconst input = $input.item.json;\n\nreturn {\n  json: {\n    ...input,\n    ai_analysis: {\n      summary: `El modelo '${input.project_name}' cumple con los estándares IFC 4.3.`,\n      recommendations: [\n        \"Optimizar la distribución de espacios en el nivel 2\",\n        \"Verificar colisiones en ductos MEP detectadas automáticamene\",\n        \"Validar cuantías de concreto según presupuesto 5D\"\n      ],\n      sentiment: \"Positivo\",\n      token_usage: 450\n    }\n  }\n};"
+      },
+      "id": "sim-ai-analysis",
+      "name": "🤖 Simulación Análisis AI (Gemini)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 240],
+      "notesInFlow": true,
+      "notes": "Sustituye la necesidad de una API Key de Gemini para propósitos de demostración."
+    },
+    {
+      "parameters": {
+        "jsCode": "// SIMULACIÓN DE ALMACENAMIENTO EN BASE DE DATOS\n// En un flujo real, aquí iría el nodo 'Notion' o 'Supabase'\n\nconst input = $input.item.json;\n\nreturn {\n  json: {\n    db_status: \"Registrado\",\n    record_id: \"REC-\" + Math.floor(Math.random() * 100000),\n    notion_url: \"https://notion.so/demo-page-placeholder\",\n    timestamp: new Date().toISOString(),\n    source_data: input\n  }\n};"
+      },
+      "id": "sim-db-storage",
+      "name": "📓 Simulación Base de Datos (Notion)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 240],
+      "notesInFlow": true,
+      "notes": "Simula la creación de un registro en Notion sin requerir Token de API."
+    },
+    {
+      "parameters": {
+        "jsCode": "// GENERACIÓN DE ALERTA DE OBRA\n\nconst input = $input.item.json;\n\nreturn {\n  json: {\n    alerta_type: \"NOTIFICACIÓN_AUTOMÁTICA\",\n    mensaje: `🚨 Nueva actualización de BIM-Orchestrator para el proyecto: ${input.source_data.project_name}`,\n    detalles: {\n      ubicacion: \"Nivel 1 - Sector A\",\n      accion_requerida: input.source_data.ai_analysis.recommendations[0],\n      prioridad: \"Alta\"\n    },\n    localizacion_3d: \"GLOBAL_ID_345-X-89\"\n  }\n};"
+      },
+      "id": "sim-alert",
+      "name": "🚨 Simulación Alerta de Obra",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 240],
+      "notesInFlow": true,
+      "notes": "Genera el payload que se enviaría a la aplicación de visualización 3D."
+    },
+    {
+      "parameters": {
+        "content": "### 🏗️ BIM-Orchestrator: Flujo de Trabajo Educativo\n\nEste workflow está diseñado para ser visualizado e importado **sin necesidad de configurar credenciales**.\n\n1. **Entrada**: Simula la recepción de un archivo IFC.\n2. **AI**: Simula el análisis arquitectónico que haría Gemini.\n3. **Storage**: Simula el registro en una base de datos (Notion).\n4. **Alerta**: Genera la notificación final para el visor 3D.\n\n*Ideal para talleres y presentaciones rápidas.*",
+        "height": 280,
+        "width": 400
+      },
+      "id": "note-info",
+      "name": "Info",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, -80]
+    }
+  ],
+  "connections": {
+    "🚀 Iniciar Simulación": {
+      "main": [
+        [
+          {
+            "node": "📦 Datos de Entrada (MOCK)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📦 Datos de Entrada (MOCK)": {
+      "main": [
+        [
+          {
+            "node": "🤖 Simulación Análisis AI (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 Simulación Análisis AI (Gemini)": {
+      "main": [
+        [
+          {
+            "node": "📓 Simulación Base de Datos (Notion)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📓 Simulación Base de Datos (Notion)": {
+      "main": [
+        [
+          {
+            "node": "🚨 Simulación Alerta de Obra",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "demo-v1",
+  "id": "demo-workflow",
+  "meta": {
+    "templateId": "BIM-DEMO-001"
+  }
+}

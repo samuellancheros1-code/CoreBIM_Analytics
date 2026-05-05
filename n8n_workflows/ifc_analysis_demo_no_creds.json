@@ -1,0 +1,91 @@
+{
+  "name": "📋 Análisis IFC a PDF (Demo Sin Credenciales)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "76685f40-3490-48e2-9d0b-6873550e5670",
+      "name": "When clicking \"Execute Workflow\"",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [380, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "// SIMULACIÓN DE EXTRACCIÓN DE DATOS IFC\n// En producción, este nodo ejecutaría el script Python extract_ifc_data.py\n\nreturn {\n  json: {\n    project_name: \"Edificio Ejemplo\",\n    walls: 45,\n    slabs: 12,\n    columns: 24,\n    schema: \"IFC4.3\",\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "e4f5a3e1-3d7c-47a8-b570-078a1f4b5e80",
+      "name": "Extraer Datos IFC (Simulado)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 240],
+      "notesInFlow": true,
+      "notes": "Sustituye la ejecución del comando Python local."
+    },
+    {
+      "parameters": {
+        "jsCode": "// SIMULACIÓN DE ANÁLISIS AI\n// En producción, este nodo usaría Google Gemini\n\nconst stats = $input.item.json;\n\nreturn {\n  json: {\n    text: `Informe de Análisis Arquitectónico:\n- El proyecto '${stats.project_name}' presenta una estructura regular.\n- Se han detectado ${stats.walls} muros y ${stats.columns} columnas.\n- Cumplimiento de norma IFC 4.3 validado.\n- Recomendación: Revisar encuentros en losas.`\n  }\n};"
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "name": "Análisis AI (Gemini Simulado)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [820, 240],
+      "notesInFlow": true,
+      "notes": "Genera un informe estático sin necesidad de API Key."
+    },
+    {
+      "parameters": {
+        "jsCode": "// SIMULACIÓN DE GENERACIÓN DE PDF\n// En producción, este nodo ejecutaría el script Python generate_pdf_report.py\n\nreturn {\n  json: {\n    success: true,\n    pdf_path: \"C:\\\\temp\\\\reporte_ifc_demo.pdf\",\n    message: \"El PDF se generaría en la ruta especificada si estuviéramos en modo real.\",\n    content_preview: $input.item.json.text\n  }\n};"
+      },
+      "id": "u1v2w3x4-y5z6-4a7b-8c9d-0e1f2a3b4c5d",
+      "name": "Generar PDF (Simulado)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 240],
+      "notesInFlow": true,
+      "notes": "Muestra el resultado final esperado del proceso."
+    }
+  ],
+  "connections": {
+    "When clicking \"Execute Workflow\"": {
+      "main": [
+        [
+          {
+            "node": "Extraer Datos IFC (Simulado)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Datos IFC (Simulado)": {
+      "main": [
+        [
+          {
+            "node": "Análisis AI (Gemini Simulado)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Análisis AI (Gemini Simulado)": {
+      "main": [
+        [
+          {
+            "node": "Generar PDF (Simulado)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "demo-analysis-v1",
+  "id": "analysis-demo",
+  "meta": {
+    "templateId": "IFC-ANALYSIS-DEMO"
+  }
+}

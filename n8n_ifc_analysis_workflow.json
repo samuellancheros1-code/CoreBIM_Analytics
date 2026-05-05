@@ -1,0 +1,155 @@
+{
+  "name": "Análisis Arquitectónico IFC a PDF",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "76685f40-3490-48e2-9d0b-6873550e5670",
+      "name": "When clicking \"Execute Workflow\"",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        380,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python \"d:\\CAMI\\Cursos-Diplomados camila\\Workshop + AI para el sector construcción\\CoreBIM_Analytics (2)\\extract_ifc_data.py\" \"{{$node[\"Read IFC File\"].json[\"path\"]}}\""
+      },
+      "id": "e4f5a3e1-3d7c-47a8-b570-078a1f4b5e80",
+      "name": "Extraer Datos IFC",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        820,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gemini-pro",
+        "prompt": "Eres un experto arquitecto. Analiza estos datos de un archivo IFC y escribe un informe detallado sobre el diseño y la arquitectura (estilo, funcionalidad, composición):\n\n{{$json}}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "name": "Análisis AI (Gemini)",
+      "type": "n8n-nodes-base.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        240
+      ],
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "YOUR_API_KEY_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "filePath": "C:\\temp\\ifc_data.json",
+        "fileContent": "={{JSON.stringify({ \"narrative\": $node[\"Análisis AI (Gemini)\"].json[\"text\"], \"stats\": $node[\"Extraer Datos IFC\"].json })}}",
+        "options": {}
+      },
+      "id": "f1g2h3i4-j5k6-4l7m-8n9o-0p1q2r3s4t5u",
+      "name": "Guardar para PDF",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1260,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python \"d:\\CAMI\\Cursos-Diplomados camila\\Workshop + AI para el sector construcción\\CoreBIM_Analytics (2)\\generate_pdf_report.py\" \"C:\\temp\\ifc_data.json\" \"C:\\temp\\reporte_ifc.pdf\""
+      },
+      "id": "u1v2w3x4-y5z6-4a7b-8c9d-0e1f2a3b4c5d",
+      "name": "Generar PDF",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1480,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "*.ifc"
+      },
+      "id": "b1c2d3e4-f5g6-4h7i-8j9k-0l1m2n3o4p5q",
+      "name": "Read IFC File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        600,
+        240
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking \"Execute Workflow\"": {
+      "main": [
+        [
+          {
+            "node": "Read IFC File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read IFC File": {
+      "main": [
+        [
+          {
+            "node": "Extraer Datos IFC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Datos IFC": {
+      "main": [
+        [
+          {
+            "node": "Análisis AI (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Análisis AI (Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Guardar para PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar para PDF": {
+      "main": [
+        [
+          {
+            "node": "Generar PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "f1234567-89ab-4cde-af01-23456789abcd",
+  "id": "1",
+  "meta": {
+    "templateId": "1234"
+  }
+}
