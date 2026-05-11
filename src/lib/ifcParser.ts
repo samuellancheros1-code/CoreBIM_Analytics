@@ -84,9 +84,16 @@ const WORKER_CODE = `
 
 function compoundAngleToDecimal(angle) {
   if (!angle || angle.length === 0) return 0;
-  const deg = angle[0], min = angle[1] || 0, sec = angle[2] || 0, usec = angle[3] || 0;
-  const sign = deg < 0 ? -1 : 1;
-  return deg + sign * (Math.abs(min) / 60) + sign * (Math.abs(sec) / 3600) + sign * (Math.abs(usec) / 3600000000);
+  const deg = (angle[0] !== undefined) ? angle[0] : 0;
+  const min = (angle[1] !== undefined) ? angle[1] : 0;
+  const sec = (angle[2] !== undefined) ? angle[2] : 0;
+  const usec = (angle[3] !== undefined) ? angle[3] : 0;
+  
+  // Detectar si es negativo: cualquier componente < 0 o si deg es -0
+  const isNegative = deg < 0 || min < 0 || sec < 0 || usec < 0 || Object.is(deg, -0);
+  const sign = isNegative ? -1 : 1;
+  
+  return sign * (Math.abs(deg) + Math.abs(min) / 60 + Math.abs(sec) / 3600 + Math.abs(usec) / 3600000000);
 }
 
 function extractMaterialName(api, IFC, modelID, materialRef) {
@@ -414,13 +421,19 @@ async function runParse(buffer, wasmBaseUrl) {
         location.description = (site.Description && site.Description.value) || '';
         if (site.RefLatitude) {
           const arr = Array.isArray(site.RefLatitude)
-            ? site.RefLatitude.map(function(v) { return (typeof v === 'object' ? (v && v.value) : v) || 0; })
+            ? site.RefLatitude.map(function(v) { 
+                const val = (typeof v === 'object' && v !== null) ? v.value : v;
+                return (val !== undefined) ? val : 0; 
+              })
             : [(site.RefLatitude.value !== undefined ? site.RefLatitude.value : site.RefLatitude)];
           location.latitude = compoundAngleToDecimal(arr);
         }
         if (site.RefLongitude) {
           const arr = Array.isArray(site.RefLongitude)
-            ? site.RefLongitude.map(function(v) { return (typeof v === 'object' ? (v && v.value) : v) || 0; })
+            ? site.RefLongitude.map(function(v) { 
+                const val = (typeof v === 'object' && v !== null) ? v.value : v;
+                return (val !== undefined) ? val : 0; 
+              })
             : [(site.RefLongitude.value !== undefined ? site.RefLongitude.value : site.RefLongitude)];
           location.longitude = compoundAngleToDecimal(arr);
         }
