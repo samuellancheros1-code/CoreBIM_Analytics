@@ -137,7 +137,7 @@ export default function IFCViewer3D({ file, externalHighlightExpressId }: IFCVie
     meshMapRef.current.clear();
     if (highlightRef.current) { scene.remove(highlightRef.current); highlightRef.current = null; }
     if (apiRef.current && modelIDRef.current >= 0) {
-      try { apiRef.current.CloseModel(modelIDRef.current); } catch (_) {}
+      try { apiRef.current.CloseModel(modelIDRef.current); } catch (_) { }
     }
     setSelected(null);
     setError(null);
@@ -193,12 +193,12 @@ export default function IFCViewer3D({ file, externalHighlightExpressId }: IFCVie
 
             for (let j = 0; j < rawVerts.length; j += 6) {
               const k = (j / 6) * 3;
-              positions[k]     = rawVerts[j];
+              positions[k] = rawVerts[j];
               positions[k + 1] = rawVerts[j + 1];
               positions[k + 2] = rawVerts[j + 2];
-              normals[k]       = rawVerts[j + 3];
-              normals[k + 1]   = rawVerts[j + 4];
-              normals[k + 2]   = rawVerts[j + 5];
+              normals[k] = rawVerts[j + 3];
+              normals[k + 1] = rawVerts[j + 4];
+              normals[k + 2] = rawVerts[j + 5];
             }
 
             const threeGeom = new THREE.BufferGeometry();
@@ -315,7 +315,7 @@ export default function IFCViewer3D({ file, externalHighlightExpressId }: IFCVie
       const props = api.GetLine(modelIDRef.current, expressId, false);
       if (props?.Name?.value) name = props.Name.value;
       else if (props?.LongName?.value) name = props.LongName.value;
-    } catch (_) {}
+    } catch (_) { }
 
     setSelected({ expressId, name });
   }, [modelLoaded]);
@@ -367,7 +367,7 @@ export default function IFCViewer3D({ file, externalHighlightExpressId }: IFCVie
   useEffect(() => {
     if (!modelLoaded || !sceneRef.current || !apiRef.current) return;
     const scene = sceneRef.current;
-    
+
     if (externalHighlightExpressId === undefined) {
       clearHighlight(scene);
       setSelected(null);
@@ -398,7 +398,7 @@ export default function IFCViewer3D({ file, externalHighlightExpressId }: IFCVie
       const props = apiRef.current.GetLine(modelIDRef.current, externalHighlightExpressId, false);
       if (props?.Name?.value) name = props.Name.value;
       else if (props?.LongName?.value) name = props.LongName.value;
-    } catch (_) {}
+    } catch (_) { }
 
     setSelected({ expressId: externalHighlightExpressId, name: name + " (ALERTA N8N)" });
 
@@ -407,7 +407,7 @@ export default function IFCViewer3D({ file, externalHighlightExpressId }: IFCVie
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const d = Math.max(size.x, size.y, size.z) * 2.5;
-    
+
     if (cameraRef.current && controlsRef.current) {
       cameraRef.current.position.set(center.x + d, center.y + d, center.z + d);
       controlsRef.current.target.copy(center);
