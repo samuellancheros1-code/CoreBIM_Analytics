@@ -13,6 +13,7 @@ export interface ProjectLocation {
   longitude: number | null;
   elevation: number | null;
   address: string;
+  guid?: string;
 }
 
 export interface MaterialQuantity {
@@ -411,7 +412,7 @@ async function runParse(buffer, wasmBaseUrl) {
   } catch(e) { warnings.push('No se pudo leer IfcProject.'); }
 
   report('Localizando proyecto (IfcSite)...', 30);
-  const location = { name: projectName, description: '', latitude: null, longitude: null, elevation: null, address: '' };
+  const location = { name: projectName, description: '', latitude: null, longitude: null, elevation: null, address: '', guid: '' };
   try {
     const sids = api.GetLineIDsWithType(modelID, IFC.IFCSITE);
     if (sids.size() > 0) {
@@ -419,6 +420,9 @@ async function runParse(buffer, wasmBaseUrl) {
       if (site) {
         location.name = (site.Name && site.Name.value) || (site.LongName && site.LongName.value) || projectName;
         location.description = (site.Description && site.Description.value) || '';
+        if (site.GlobalId && site.GlobalId.value) {
+          location.guid = site.GlobalId.value;
+        }
         if (site.RefLatitude) {
           const arr = Array.isArray(site.RefLatitude)
             ? site.RefLatitude.map(function(v) { 

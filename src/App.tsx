@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { buildPresupuesto, PresupuestoGeneral } from './lib/apuEngine';
 import { parseIFCFile, ParsedIFCData, IFCElementData } from './lib/ifcParser';
 import { exportToExcel } from './lib/excelExporter';
+import { generateBIMData, OutputJson as BIMData } from './lib/bimEngine';
 import IFCViewer3D from './components/IFCViewer3D';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -10,7 +11,7 @@ import {
 import {
   MapPin, Download, FileSpreadsheet, Package, Layers, ChevronRight,
   CheckCircle, Loader2, Info, BarChart2, ClipboardList, Search, Table2, X, Cube,
-  Globe, Navigation, Camera, Locate, Edit3, Box, FileUp, AlertCircle, DollarSign, TrendingUp, AlertTriangle
+  Globe, Navigation, Camera, Locate, Edit3, Box, FileUp, AlertCircle, DollarSign, TrendingUp, AlertTriangle, Clock
 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -22,7 +23,7 @@ function cn(...classes: (string | boolean | undefined | null)[]) {
 }
 
 const COP = (v: number) =>
-  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v);
+  'COP ' + new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(v);
 
 const PCT = (v: number) => `${(v * 100).toFixed(0)}%`;
 
@@ -33,17 +34,14 @@ const CHART_COLORS = [
 ];
 
 // ─── Tipos de Vista ────────────────────────────────────────────────────────────
-<<<<<<< HEAD
-type View = 'upload' | 'dashboard' | 'budget' | 'apu' | 'map' | 'elements' | 'viewer3d' | 'json';
-=======
 type View = 'upload' | 'dashboard' | 'budget' | 'apu' | 'map' | 'elements' | 'viewer3d' | 'json' | 'skill';
->>>>>>> 7075fc6 (feat: integrate localization skill, fix coordinate parsing, and add skill documentation tab)
 
 // ─── Componente Principal ──────────────────────────────────────────────────────
 export default function App() {
   const [view, setView] = useState<View>('upload');
   const [parsedData, setParsedData] = useState<ParsedIFCData | null>(null);
   const [presupuesto, setPresupuesto] = useState<PresupuestoGeneral | null>(null);
+  const [bim4DData, setBim4DData] = useState<BIMData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -74,8 +72,10 @@ export default function App() {
         setLoadingProgress(pct);
       });
       const budget = buildPresupuesto(data.materialQuantities);
+      const bim4d = generateBIMData();
       setParsedData(data);
       setPresupuesto(budget);
+      setBim4DData(bim4d);
       setView('dashboard');
     } catch (err) {
       setParseError('Error al procesar el IFC: ' + String(err));
@@ -138,7 +138,7 @@ export default function App() {
       <header className="bg-slate-900/80 backdrop-blur-sm border-b border-slate-800 sticky top-0 z-50 shadow-lg">
         <div className="max-w-screen-xl mx-auto px-4 lg:px-8 h-16 flex items-center justify-between gap-4">
           <button
-            onClick={() => { setView('upload'); setParsedData(null); setPresupuesto(null); }}
+            onClick={() => { setView('upload'); setParsedData(null); setPresupuesto(null); setBim4DData(null); }}
             className="flex items-center gap-2.5 group"
           >
             <div className="w-8 h-8 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-center group-hover:border-emerald-500/60 transition-colors">
@@ -153,14 +153,13 @@ export default function App() {
           {parsedData && (
             <nav className="flex items-center gap-1 overflow-x-auto">
               {([
-                { id: 'dashboard', icon: BarChart2, label: 'Dashboard' },
-                { id: 'budget', icon: ClipboardList, label: 'Presupuesto' },
                 { id: 'apu', icon: Layers, label: 'APUs' },
-                { id: 'elements', icon: Table2, label: 'Elementos' },
-                { id: 'viewer3d', icon: Box, label: 'Visor 3D' },
-                { id: 'map', icon: MapPin, label: 'Ubicación' },
-                { id: 'skill', icon: Info, label: 'Skill Info' },
+                { id: 'dashboard', icon: BarChart2, label: 'Dashboard' },
                 { id: 'json', icon: Package, label: 'Dataset' },
+                { id: 'elements', icon: Table2, label: 'Elementos' },
+                { id: 'budget', icon: ClipboardList, label: 'Presupuesto y 4D' },
+                { id: 'map', icon: MapPin, label: 'Ubicación' },
+                { id: 'viewer3d', icon: Box, label: 'Visor 3D' },
               ] as { id: View; icon: React.ElementType; label: string }[]).map(tab => {
                 const Icon = tab.icon;
                 return (
@@ -306,7 +305,7 @@ export default function App() {
 
               {/* KPIs */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard icon={DollarSign} color="emerald" label="Presupuesto Total" value={COP(presupuesto.totalGeneral)} sub={`Costo Directo: ${COP(presupuesto.costoDirectoTotal)}`} />
+                <KpiCard icon={DollarSign} color="emerald" label="Presupuesto Total (COP)" value={COP(presupuesto.totalGeneral)} sub={`Costo Directo: ${COP(presupuesto.costoDirectoTotal)}`} />
                 <KpiCard icon={Package} color="blue" label="Materiales IFC" value={`${parsedData.materialQuantities.length}`} sub={`${parsedData.rawElementCount} elementos totales`} />
                 <KpiCard icon={Layers} color="purple" label="Partidas APU" value={`${presupuesto.items.length}`} sub="Análisis de precios unitarios" />
                 <KpiCard icon={MapPin} color="rose" label="Ubicación" value={parsedData.location.latitude !== null ? '✓ Geolocalizado' : 'Sin coords GPS'} sub={parsedData.location.name} />
@@ -362,10 +361,11 @@ export default function App() {
 
               {/* Resumen financiero */}
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                <h3 className="font-semibold text-slate-100 mb-4 flex items-center gap-2">
+                <h3 className="font-semibold text-slate-100 mb-1 flex items-center gap-2">
                   <DollarSign className="w-4 h-4 text-emerald-400" />
                   Resumen Financiero
                 </h3>
+                <p className="text-[10px] text-slate-500 mb-4">Todos los valores en Pesos Colombianos (COP)</p>
                 <div className="space-y-2">
                   {[
                     { label: 'Costo Directo - Materiales', value: presupuesto.subtotalMateriales, color: 'text-emerald-400' },
@@ -399,7 +399,7 @@ export default function App() {
           {view === 'budget' && presupuesto && (
             <motion.div key="budget" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-100">Presupuesto General de Obra</h2>
+                <h2 className="text-xl font-bold text-slate-100">Presupuesto General y Control 4D</h2>
                 <button
                   onClick={handleExportExcel}
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors"
@@ -417,8 +417,8 @@ export default function App() {
                         <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Descripción de la Partida</th>
                         <th className="text-center text-xs text-slate-400 font-medium px-4 py-3 w-16">Und</th>
                         <th className="text-right text-xs text-slate-400 font-medium px-4 py-3 w-24">Cantidad</th>
-                        <th className="text-right text-xs text-slate-400 font-medium px-4 py-3 w-36">Precio Unit.</th>
-                        <th className="text-right text-xs text-slate-400 font-medium px-4 py-3 w-36">Total</th>
+                        <th className="text-right text-xs text-slate-400 font-medium px-4 py-3 w-36">Precio Unit. (COP)</th>
+                        <th className="text-right text-xs text-slate-400 font-medium px-4 py-3 w-36">Total (COP)</th>
                         <th className="text-center text-xs text-slate-400 font-medium px-4 py-3 w-24">APU</th>
                       </tr>
                     </thead>
@@ -465,6 +465,87 @@ export default function App() {
                   </table>
                 </div>
               </div>
+
+              {/* INTEGRACIÓN DE CONTROL 4D (Curva S y Alertas) */}
+              {bim4DData && (
+                <div className="pt-8 border-t border-slate-800 mt-8 space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2"><Clock className="w-5 h-5 text-blue-400" /> Control Operativo Probabilístico (4D)</h2>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Ingesta de cronograma sin fechas determinísticas · Simulación PERT
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Alertas Tempranas */}
+                  {bim4DData.control4D.alerts.length > 0 && (
+                    <div className="space-y-3">
+                      {bim4DData.control4D.alerts.map((alert, i) => (
+                        <div key={i} className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex gap-3">
+                          <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-red-300 text-sm font-medium mb-1">Alerta Temprana de Desviación</p>
+                            <p className="text-red-400/80 text-xs">{alert.message}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow col-span-1 lg:col-span-2">
+                      <h3 className="font-semibold text-slate-100 mb-4 flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-emerald-400" />
+                        Distribución de Probabilidad de Cumplimiento (Curva S)
+                      </h3>
+                      <div className="text-xs text-slate-400 mb-6">
+                        Proyección del flujo de caja en diferentes escenarios de riesgo operativo.
+                      </div>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={bim4DData.stressSimulations.baseCurveS.map((item, i) => ({
+                          day: item.day,
+                          Base: item.cumulativeCost,
+                          'Escenario A (+12% Mat)': bim4DData.stressSimulations.scenarioA_CurveS[i]?.cumulativeCost,
+                          'Escenario B (Cisne Negro)': bim4DData.stressSimulations.scenarioB_CurveS[i]?.cumulativeCost,
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                          <XAxis dataKey="day" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                          <YAxis tickFormatter={v => `$${(v / 1000000).toFixed(0)}M`} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                          <Tooltip formatter={(v: number) => COP(v)} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', fontSize: '12px' }} />
+                          <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px' }} />
+                          <Line type="monotone" dataKey="Base" stroke="#10b981" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="Escenario A (+12% Mat)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                          <Line type="monotone" dataKey="Escenario B (Cisne Negro)" stroke="#ef4444" strokeWidth={2} strokeDasharray="3 3" dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow space-y-4">
+                      <h3 className="font-semibold text-slate-100 flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-blue-400" />
+                        Hitos Críticos y Simulación
+                      </h3>
+                      <div className="text-[10px] text-slate-500 mb-2">Duración Total Esperada (PERT): <span className="text-slate-300 font-bold">{bim4DData.control4D.expectedProjectDuration} días</span></div>
+                      <div className="space-y-3">
+                        {bim4DData.control4D.tasks.map(t => (
+                          <div key={t.id} className="p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                            <div className="text-xs text-slate-300 font-medium truncate mb-1">{t.name}</div>
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-slate-500">Duración PERT</span>
+                              <span className="font-mono text-emerald-400">{t.pertDuration} d</span>
+                            </div>
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-slate-500">Varianza</span>
+                              <span className="font-mono text-slate-400">{t.variance}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -610,61 +691,83 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Tabla de elementos */}
+                {/* Tabla de elementos AGRUPADOS POR TIPO */}
                 <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                   <div className="overflow-y-auto max-h-[60vh]">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-slate-800/90 backdrop-blur-sm">
-                        <tr>
-                          <th className="text-left text-xs text-slate-400 font-medium px-3 py-2.5">Tipo</th>
-                          <th className="text-left text-xs text-slate-400 font-medium px-3 py-2.5">Nombre</th>
-                          <th className="text-left text-xs text-slate-400 font-medium px-3 py-2.5">Material</th>
-                          <th className="text-right text-xs text-slate-400 font-medium px-3 py-2.5">PSets</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {parsedData.elements
-                          .filter(el => {
-                            if (!elemSearch) return true;
-                            const q = elemSearch.toLowerCase();
-                            return (
-                              el.name.toLowerCase().includes(q) ||
-                              el.globalId.toLowerCase().includes(q) ||
-                              el.elementLabel.toLowerCase().includes(q) ||
-                              el.materialName.toLowerCase().includes(q) ||
-                              el.tag.toLowerCase().includes(q)
-                            );
-                          })
-                          .slice(0, 200)
-                          .map((el, i) => (
-                            <tr
-                              key={i}
-                              onClick={() => setSelectedElement(el)}
-                              className={cn(
-                                'border-b border-slate-800/50 cursor-pointer transition-colors',
-                                selectedElement?.expressId === el.expressId
-                                  ? 'bg-emerald-500/10 border-l-2 border-l-emerald-500'
-                                  : 'hover:bg-slate-800/40'
+                    {(() => {
+                      const filtered = parsedData.elements.filter(el => {
+                        if (!elemSearch) return true;
+                        const q = elemSearch.toLowerCase();
+                        return (
+                          el.name.toLowerCase().includes(q) ||
+                          el.globalId.toLowerCase().includes(q) ||
+                          el.elementLabel.toLowerCase().includes(q) ||
+                          el.materialName.toLowerCase().includes(q) ||
+                          el.tag.toLowerCase().includes(q)
+                        );
+                      });
+                      // Agrupar por elementLabel
+                      const grouped: Record<string, typeof filtered> = {};
+                      filtered.forEach(el => {
+                        const key = el.elementLabel || 'Sin tipo';
+                        if (!grouped[key]) grouped[key] = [];
+                        grouped[key].push(el);
+                      });
+                      const sortedTypes = Object.keys(grouped).sort();
+                      return sortedTypes.map(tipo => (
+                        <details key={tipo} open={!!elemSearch} className="group border-b border-slate-800 last:border-0">
+                          <summary className="flex items-center justify-between px-3 py-2.5 cursor-pointer bg-slate-800/40 hover:bg-slate-800/70 transition-colors list-none select-none">
+                            <div className="flex items-center gap-2">
+                              <ChevronRight className="w-3.5 h-3.5 text-slate-500 transition-transform group-open:rotate-90" />
+                              <span className="text-xs font-mono font-semibold text-emerald-400">{tipo}</span>
+                            </div>
+                            <span className="text-[10px] bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full font-mono">{grouped[tipo].length}</span>
+                          </summary>
+                          <table className="w-full text-sm">
+                            <thead className="bg-slate-800/20">
+                              <tr>
+                                <th className="text-left text-[10px] text-slate-500 font-medium px-3 py-1.5">Nombre</th>
+                                <th className="text-left text-[10px] text-slate-500 font-medium px-3 py-1.5">Material</th>
+                                <th className="text-right text-[10px] text-slate-500 font-medium px-3 py-1.5">PSets</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {grouped[tipo].slice(0, 100).map((el, i) => (
+                                <tr
+                                  key={i}
+                                  onClick={() => setSelectedElement(el)}
+                                  className={cn(
+                                    'border-b border-slate-800/30 cursor-pointer transition-colors',
+                                    selectedElement?.expressId === el.expressId
+                                      ? 'bg-emerald-500/10 border-l-2 border-l-emerald-500'
+                                      : 'hover:bg-slate-800/40'
+                                  )}
+                                >
+                                  <td className="px-3 py-1.5">
+                                    <div className="text-slate-200 text-xs font-medium truncate max-w-[130px]">{el.name || '—'}</div>
+                                    <div className="text-slate-600 text-[9px] font-mono truncate max-w-[130px]">{el.globalId}</div>
+                                  </td>
+                                  <td className="px-3 py-1.5 text-slate-400 text-xs truncate max-w-[100px]">{el.materialName || '—'}</td>
+                                  <td className="px-3 py-1.5 text-right">
+                                    <span className={cn(
+                                      'text-[10px] font-bold px-1.5 py-0.5 rounded',
+                                      el.propertySets.length > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-500'
+                                    )}>{el.propertySets.length}</span>
+                                  </td>
+                                </tr>
+                              ))}
+                              {grouped[tipo].length > 100 && (
+                                <tr>
+                                  <td colSpan={3} className="px-3 py-1.5 text-[10px] text-slate-600 text-center">
+                                    +{grouped[tipo].length - 100} elementos más...
+                                  </td>
+                                </tr>
                               )}
-                            >
-                              <td className="px-3 py-2">
-                                <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-mono">{el.elementLabel}</span>
-                              </td>
-                              <td className="px-3 py-2">
-                                <div className="text-slate-200 text-xs font-medium truncate max-w-[120px]">{el.name || '—'}</div>
-                                <div className="text-slate-500 text-[10px] font-mono truncate max-w-[120px]">{el.globalId}</div>
-                              </td>
-                              <td className="px-3 py-2 text-slate-400 text-xs truncate max-w-[100px]">{el.materialName}</td>
-                              <td className="px-3 py-2 text-right">
-                                <span className={cn(
-                                  'text-[10px] font-bold px-1.5 py-0.5 rounded',
-                                  el.propertySets.length > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-500'
-                                )}>{el.propertySets.length}</span>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
+                            </tbody>
+                          </table>
+                        </details>
+                      ));
+                    })()}
                   </div>
                 </div>
 
@@ -811,9 +914,6 @@ export default function App() {
           {/* ─── Vista: Mapa de Ubicación ──────────────────────────────────── */}
           {view === 'map' && parsedData && (
             <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-<<<<<<< HEAD
-              <h2 className="text-xl font-bold text-slate-100">Localización Geoespacial</h2>
-=======
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold text-slate-100">Localización Geoespacial</h2>
                 <div className="flex items-center gap-2">
@@ -827,7 +927,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
->>>>>>> 7075fc6 (feat: integrate localization skill, fix coordinate parsing, and add skill documentation tab)
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
                   <h3 className="font-semibold text-slate-200 flex items-center gap-2">
@@ -836,6 +935,7 @@ export default function App() {
                   {[
                     { label: 'Nombre del Proyecto', value: parsedData.projectName },
                     { label: 'Sitio (IfcSite)', value: parsedData.location.name },
+                    { label: 'IfcSite GUID', value: parsedData.location.guid || '—' },
                     { label: 'Dirección', value: parsedData.location.address || 'Pendiente de definir' },
                     { label: 'Latitud', value: parsedData.location.latitude !== null ? `${parsedData.location.latitude.toFixed(6)}°` : '—' },
                     { label: 'Longitud', value: parsedData.location.longitude !== null ? `${parsedData.location.longitude.toFixed(6)}°` : '—' },
@@ -874,7 +974,7 @@ export default function App() {
                     </h4>
                     <p className="text-[10px] text-slate-400 leading-relaxed">
                       {parsedData.location.latitude !== null 
-                        ? 'Coordenadas extraídas exitosamente del archivo IFC (IfcSite.RefLatitude/RefLongitude).' 
+                        ? 'Información de ubicación extraída exitosamente del archivo IFC mediante el IfcSite GUID.' 
                         : 'El modelo no contiene coordenadas. Utiliza Google Earth para obtener la ubicación exacta y actualizar el modelo en la fase de coordinación.'}
                     </p>
                   </div>
@@ -1056,6 +1156,8 @@ export default function App() {
              </motion.div>
            )}
 
+
+
           {/* ─── Vista: Dataset JSON ───────────────────────────────────────── */}
           {view === 'json' && parsedData && presupuesto && (
             <motion.div key="json" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -1130,7 +1232,7 @@ function LeafletMap({ lat, lon, projectName }: { lat: number; lon: number; proje
 
   return <div ref={mapRef} className="w-full h-full z-0" />;
 }
-}
+
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 function KpiCard({ icon: Icon, color, label, value, sub }: {
