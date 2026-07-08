@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import {
   MapPin, Download, FileSpreadsheet, Package, Layers, ChevronRight,
-  CheckCircle, Loader2, Info, BarChart2, ClipboardList, Search, Table2, X, Cube,
+  CheckCircle, Loader2, Info, BarChart2, ClipboardList, Search, Table2, X,
   Globe, Navigation, Camera, Locate, Edit3, Box, FileUp, AlertCircle, DollarSign, TrendingUp, AlertTriangle, Clock
 } from 'lucide-react';
 import L from 'leaflet';
@@ -566,7 +566,7 @@ export default function App() {
                           : 'bg-slate-800 text-slate-400 hover:text-slate-200'
                       )}
                     >
-                      {item.apu.codigo}
+                      Item {item.item} · {item.apu.codigo}
                     </button>
                   ))}
                 </div>
@@ -580,9 +580,9 @@ export default function App() {
                     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
                       <div className="flex flex-wrap gap-4 items-start justify-between">
                         <div>
-                          <div className="text-xs text-emerald-400 font-mono mb-1">{apu.codigo}</div>
+                          <div className="text-xs text-emerald-400 font-mono mb-1">Item {item.item} · {apu.codigo}</div>
                           <h3 className="text-lg font-semibold text-slate-100">{apu.descripcion}</h3>
-                          <p className="text-slate-400 text-sm mt-1">Material IFC: <span className="text-slate-300">{item.materialRef}</span></p>
+                          <p className="text-slate-400 text-sm mt-1">Elemento IFC: <span className="text-slate-300">{item.descripcion}</span></p>
                         </div>
                         <div className="text-right">
                           <div className="text-xs text-slate-500 mb-1">Precio Unitario Total (con AIU)</div>
@@ -1188,7 +1188,8 @@ function LeafletMap({ lat, lon, projectName }: { lat: number; lon: number; proje
 
   useEffect(() => {
     if (!mapRef.current) return;
-    
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
     // Si ya hay una instancia, la removemos antes de crear una nueva
     if (mapInstance.current) {
       mapInstance.current.remove();
@@ -1196,9 +1197,11 @@ function LeafletMap({ lat, lon, projectName }: { lat: number; lon: number; proje
     }
 
     try {
-      // Create map
-      const map = L.map(mapRef.current).setView([lat, lon], 16);
+      // Create map (asignar la instancia antes de setView para poder limpiarla
+      // aunque setView falle, y evitar el error "Map container is already initialized")
+      const map = L.map(mapRef.current);
       mapInstance.current = map;
+      map.setView([lat, lon], 16);
 
       // Add Dark Mode tiles (CartoDB Dark Matter)
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {

@@ -425,21 +425,23 @@ async function runParse(buffer, wasmBaseUrl) {
         }
         if (site.RefLatitude) {
           const arr = Array.isArray(site.RefLatitude)
-            ? site.RefLatitude.map(function(v) { 
+            ? site.RefLatitude.map(function(v) {
                 const val = (typeof v === 'object' && v !== null) ? v.value : v;
-                return (val !== undefined) ? val : 0; 
+                return (val !== undefined) ? val : 0;
               })
             : [(site.RefLatitude.value !== undefined ? site.RefLatitude.value : site.RefLatitude)];
-          location.latitude = compoundAngleToDecimal(arr);
+          const parsedLat = compoundAngleToDecimal(arr);
+          location.latitude = Number.isFinite(parsedLat) ? parsedLat : null;
         }
         if (site.RefLongitude) {
           const arr = Array.isArray(site.RefLongitude)
-            ? site.RefLongitude.map(function(v) { 
+            ? site.RefLongitude.map(function(v) {
                 const val = (typeof v === 'object' && v !== null) ? v.value : v;
-                return (val !== undefined) ? val : 0; 
+                return (val !== undefined) ? val : 0;
               })
             : [(site.RefLongitude.value !== undefined ? site.RefLongitude.value : site.RefLongitude)];
-          location.longitude = compoundAngleToDecimal(arr);
+          const parsedLon = compoundAngleToDecimal(arr);
+          location.longitude = Number.isFinite(parsedLon) ? parsedLon : null;
         }
         if (site.RefElevation) {
           location.elevation = (site.RefElevation.value !== undefined ? site.RefElevation.value : site.RefElevation) || null;
